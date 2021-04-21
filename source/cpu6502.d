@@ -23,42 +23,41 @@ struct CPU_6502 {
 	bool stopExecution;
 	bool executionEnded;
 	@disable this();
-	this(ubyte[] mem, uint initialPC) {
+	this(ubyte[] mem, uint initialPC) @safe pure {
 		memory = mem;
 		_PC = initialPC;
-		popFront();
 	}
-	void reset() pure {
+	void reset() @safe pure {
 		processorFlags = defaultFlags;
 		IndexX = IndexY = Accum = 0;
 		StackPointer = defaultStackLocation;
 	}
-	static ulong translate(ulong addr) {
+	static ulong translate(ulong addr) @safe pure {
 		return ((addr >> 13) << 16) + (addr&0x1FFF) - 0x10;
 	}
-	void setSpecial(string flag, string val) pure {
+	void setSpecial(string flag, string val) @safe pure {
 		switch (flag) {
 			case "longjmpstop", "Stop at Long Jump": stopAtLongJump = ((val != "0") && (val != "false")); break;
 			default: throw new UnsupportedFlagException(flag);
 		}
 	}
-	string getSpecial(string flag) pure {
+	string getSpecial(string flag) @safe pure {
 		switch (flag) {
 			case "longjmpstop", "Stop at Long Jump": return stopAtLongJump.text;
 			default: throw new UnsupportedFlagException(flag);
 		}
 	}
-	@property public string addressFormat() pure {return "%06X"; }
+	string addressFormat() @safe pure {return "%06X"; }
 	ulong offset(uint addr) pure {
 		return _PC = addr;
 	}
-	bool empty() @safe {
+	bool empty() @safe pure {
 		return executionEnded;
 	}
 	uint fullAddr() @safe pure {
 		return _PC;
 	}
-	void popFront() @safe {
+	void popFront() @safe pure {
 		if (stopExecution) {
 			executionEnded = true;
 			return;

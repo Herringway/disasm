@@ -28,12 +28,11 @@ struct CPU_65816 {
 	bool stopExecution;
 	bool executionEnded;
 	@disable this();
-	this(ubyte[] mem, uint initialPC) {
+	this(ubyte[] mem, uint initialPC) @safe pure {
 		memory = mem;
 		_PC = initialPC;
-		popFront();
 	}
-	void reset() pure {
+	void reset() @safe pure {
 		processorFlags = defaultFlags;
 		IndexX = IndexY = Accum = 0;
 		ProgramBank = 0x00;
@@ -41,13 +40,13 @@ struct CPU_65816 {
 		DirectPage = 0x0000;
 		StackPointer = defaultStackLocation;
 	}
-	static ulong translate(ulong addr) {
+	static ulong translate(ulong addr) @safe pure {
 		if ((addr >= 0xC00000) && (addr <= 0xFFFFFF)) {
 			return addr - 0xC00000;
 		}
 		return addr;
 	}
-	void setSpecial(string flag, string val) pure {
+	void setSpecial(string flag, string val) @safe pure {
 		switch (flag) {
 			case "accum", "M", "8 Bit Accum": accum8 = ((val != "0") && (val != "false")); break;
 			case "index", "X", "8 Bit Index": index8 = ((val != "0") && (val != "false")); break;
@@ -55,7 +54,7 @@ struct CPU_65816 {
 			default: throw new UnsupportedFlagException(flag);
 		}
 	}
-	string getSpecial(string flag) pure {
+	string getSpecial(string flag) @safe pure {
 		switch (flag) {
 			case "accum", "M", "8 Bit Accum": return accum8.text;
 			case "index", "X", "8 Bit Index": return index8.text;
@@ -63,13 +62,13 @@ struct CPU_65816 {
 			default: throw new UnsupportedFlagException(flag);
 		}
 	}
-	@property ref bool accum8() @safe pure {
+	ref bool accum8() @safe pure {
 		return processorFlags[Flags65816.AccumWidth];
 	}
-	@property ref bool index8() @safe pure {
+	ref bool index8() @safe pure {
 		return processorFlags[Flags65816.IndexWidth];
 	}
-	@property public string addressFormat() pure {return "%06X"; }
+	string addressFormat() @safe pure {return "%06X"; }
 	ulong offset(uint addr) pure {
 		DataBank = cast(ubyte)((addr&0xFF0000)>>16);
 		return _PC = (addr & 0xFFFF);
@@ -77,10 +76,10 @@ struct CPU_65816 {
 	uint fullAddr() @safe pure {
 		return (DataBank << 16) + _PC;
 	}
-	bool empty() @safe {
+	bool empty() @safe pure {
 		return executionEnded;
 	}
-	void popFront() @safe {
+	void popFront() @safe pure {
 		if (stopExecution) {
 			executionEnded = true;
 			return;
@@ -274,7 +273,7 @@ enum Addressing {
 	ABSOLUTEINDEXEDY, ABSOLUTELONGINDEXED, BlockMove, ProcConst, ABSOLUTELONGJMP, Const, DPINDIRECTLONGINDEXEDY,
 	ABSOLUTEINDIRECT, ABSOLUTEINDIRECTLONG, SmallConst, ABSOLUTEINDEXEDINDIRECT, RELATIVELONG
 }
-@property bool hasAddress(Addressing addr) pure @safe {
+bool hasAddress(Addressing addr) pure @safe {
 	return !addr.among(Addressing.None, Addressing.Return, Addressing.BlockMove);
 }
 struct AddressingInfo {

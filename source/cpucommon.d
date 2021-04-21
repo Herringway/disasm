@@ -4,9 +4,10 @@ import std.format;
 
 import std.stdio;
 
-ExecutionResults execute(CPU)(CPU cpu) {
+ExecutionResults execute(CPU)(CPU cpu) @safe pure {
 	import std.algorithm.iteration : filter, map;
 	import std.algorithm.sorting : sort;
+	import std.array : array;
 	import std.range : enumerate;
 	ExecutionResults output;
 	bool stopExecution;
@@ -19,7 +20,7 @@ ExecutionResults execute(CPU)(CPU cpu) {
 		}
 		output.instructions ~= instruction;
 	}
-	foreach (id, labelAddr; output.labels.keys.sort.filter!(x => output.labels[x].name == "").enumerate) {
+	foreach (id, labelAddr; output.labels.byKey.array.sort.filter!(x => output.labels[x].name == "").enumerate) {
 		output.labels[labelAddr].name = format!"@UNKNOWN%d"(id);
 	}
 	return output;
@@ -33,32 +34,6 @@ struct Label {
 struct ExecutionResults {
 	Instruction[] instructions;
 	Label[ulong] labels;
-	void toString(Writer)(Writer sink, const FormatSpec!char fmt) const {
-		import std.format : format, formattedWrite;
-		import std.range : put;
-		foreach (instruction; instructions.dup) {
-			if (instruction.fullAddress in labels) {
-				sink.formattedWrite!"%s:\n"(labels[instruction.fullAddress].name);
-			}
-			if (fmt.spec == 'r') {
-				if (instruction.hasBank) {
-					sink.formattedWrite(instruction.bankFormat, instruction.bank);
-				}
-				sink.formattedWrite(instruction.offsetFormat, instruction.offset);
-				sink.formattedWrite!" % -12s"(format!"%(%02X %)"(instruction.raw));
-			} else {
-				put(sink, "\t");
-			}
-			if (instruction.isBranch && !instruction.target.address.isNull && (instruction.target.address.get in labels)) {
-				instruction.target.name = labels[instruction.target.address.get].name;
-			}
-			sink.formattedWrite!"%s %s"(instruction.mnemonic, instruction.target);
-			if (!instruction.comment.isNull) {
-				sink.formattedWrite!"; %s"(instruction.comment.get);
-			}
-			put(sink, "\n");
-		}
-	}
 }
 
 struct Instruction {
@@ -76,6 +51,14 @@ struct Instruction {
 			}
 			return format(this.format, name);
 		}
+		bool opEquals(const Target other) const @safe {
+			return ((this.name.isNull || other.name.isNull)
+				? ((this.address.isNull || other.address.isNull)
+					? (this.argument == other.argument)
+					: (this.address == other.address))
+				: (this.name == other.name)) &&
+				this.format == other.format;
+		}
 	}
 	ulong fullAddress;
 	ulong offset;
@@ -88,11 +71,22 @@ struct Instruction {
 	Target target;
 	bool isBranch;
 	Nullable!(string,"") comment;
-}
-
-void x() {
-	import std.array;
-	const instr = ExecutionResults();
-	Appender!(char[]) appender;
-	instr.toString(appender, FormatSpec!char.init);
+	void toString(Writer)(Writer sink, const FormatSpec!char fmt) const {
+		import std.format : format, formattedWrite;
+		import std.range : put;
+		if (fmt.spec == 'r') {
+			if (hasBank) {
+				sink.formattedWrite(bankFormat, bank);
+			}
+			sink.formattedWrite(offsetFormat, offset);
+			sink.formattedWrite!" % -12s"(format!"%(%02X %)"(raw));
+		} else {
+			put(sink, "              ");
+		}
+		sink.formattedWrite!"%s %s"(mnemonic, target);
+	}
+	bool opEquals(const Instruction other) const @safe {
+		return this.mnemonic == other.mnemonic &&
+			this.target == other.target;
+	}
 }
