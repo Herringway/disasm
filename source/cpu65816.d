@@ -181,6 +181,7 @@ struct Instruction65816 {
 				output.target.address = fullAddress;
 			}
 		}
+		output.addressingMode = addressing.text;
 		return output;
 	}
 	bool isBranch() const @safe pure {

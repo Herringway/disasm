@@ -25,6 +25,7 @@ struct Options {
 	bool showRaw;
 	uint memorySpace;
 	CPU cpu;
+	bool interactive;
 }
 
 int main(string[] args) {
@@ -33,6 +34,7 @@ int main(string[] args) {
 	auto getoptInfo = getopt(args, config.caseSensitive,
 		"cpuid|C", &options.memorySpace,
 		"cpu|c", &options.cpu,
+		"interactive|i", &options.interactive,
 		"flag|f", &options.special,
 		"raw|r", &options.showRaw,
 		"size|s", &options.overrideSize,
@@ -42,10 +44,11 @@ int main(string[] args) {
 		return 1;
 	}
 	ExecutionResults[] results;
+	ubyte[][] buffers;
 	foreach (chunk; args[1 ..  $].chunks(2)) {
 		auto path = chunk[0];
 		auto offsetStr = chunk[1];
-		auto data = cast(ubyte[])read(path);
+		buffers ~= cast(ubyte[])read(path);
 		ulong offset;
 		if (args.length > 2) {
 			try {
@@ -55,56 +58,79 @@ int main(string[] args) {
 				return 1;
 			}
 		}
-		results ~= fixup(disassemble(options, data, offset));
+		results ~= ExecutionResults(null, null, offset);
 	}
-	foreach (idx; 0 .. results.map!(x => x.instructions.length).maxElement) {
-		size_t labelsWritten;
-		foreach (count, result; results) {
-			if (idx >= result.instructions.length) {
-				continue;
-			}
-			const address = result.instructions[idx].fullAddress;
-			if (address in result.labels) {
-				foreach (space; 0 .. count - labelsWritten) {
-					writef("% 60s", "");
+	while (true) {
+		foreach (i, ref result; results) {
+			result = fixup(disassemble(options, buffers[i], result.nextOffset));
+		}
+		foreach (idx; 0 .. results.map!(x => x.instructions.length).maxElement) {
+			size_t labelsWritten;
+			foreach (count, result; results) {
+				if (idx >= result.instructions.length) {
+					continue;
 				}
-				labelsWritten++;
-				writef!"% -60s"(result.labels[address].name~":");
+				const address = result.instructions[idx].fullAddress;
+				if (address in result.labels) {
+					foreach (space; 0 .. count - labelsWritten) {
+						writef("% 60s", "");
+					}
+					labelsWritten++;
+					writef!"% -60s"(result.labels[address].name~":");
+				}
 			}
+			if (labelsWritten > 0) {
+				writeln();
+			}
+			bool differences;
+			foreach (result; results[1 .. $]) {
+				if ((idx >= result.instructions.length) || (idx >= results[0].instructions.length)) {
+					differences = true;
+					break;
+				}
+				const baseline = results[0].instructions[idx];
+				const instruction = result.instructions[idx];
+				if (baseline != instruction) {
+					differences = true;
+				}
+			}
+			if (differences) {
+				write("\u001b[31m");
+			} else {
+				write("\u001b[32m");
+			}
+			foreach (resId, result; results) {
+				if (idx >= result.instructions.length) {
+					writef("% 60s", "");
+					continue;
+				}
+				auto instruction = result.instructions[idx];
+				if (options.showRaw) {
+					writef!"% -60s"(format!"    %r"(instruction));
+				} else {
+					writef!"% -60s"(format!"    %s"(instruction));
+				}
+			}
+			writeln("\u001b[0m");
 		}
-		if (labelsWritten > 0) {
-			writeln();
-		}
-		bool differences;
-		foreach (result; results[1 .. $]) {
-			if ((idx >= result.instructions.length) || (idx >= results[0].instructions.length)) {
-				differences = true;
+		if (!options.interactive) {
+			break;
+		} else {
+			writeln("Continue? (y/n)");
+			bool shouldContinue;
+			string line;
+			while ((line = readln()) !is null) {
+				if (line == "y\n") {
+					shouldContinue = true;
+					break;
+				} else if (line == "n\n") {
+					break;
+				}
+			}
+			if (!shouldContinue) {
 				break;
 			}
-			const baseline = results[0].instructions[idx];
-			const instruction = result.instructions[idx];
-			if (baseline != instruction) {
-				differences = true;
-			}
 		}
-		if (differences) {
-			write("\u001b[31m");
-		} else {
-			write("\u001b[32m");
-		}
-		foreach (resId, result; results) {
-			if (idx >= result.instructions.length) {
-				writef("% 60s", "");
-				continue;
-			}
-			auto instruction = result.instructions[idx];
-			if (options.showRaw) {
-				writef!"% -60s"(format!"    %r"(instruction));
-			} else {
-				writef!"% -60s"(format!"    %s"(instruction));
-			}
-		}
-		writeln("\u001b[0m");
 	}
 
 	return 0;

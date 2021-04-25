@@ -4,16 +4,16 @@ import std.format;
 
 import std.stdio;
 
-ExecutionResults execute(CPU)(CPU cpu) @safe pure {
+ExecutionResults execute(CPU)(ref CPU cpu) @safe pure {
 	import std.algorithm.iteration : filter, map;
 	import std.algorithm.sorting : sort;
 	import std.array : array;
-	import std.range : enumerate;
+	import std.range : enumerate, front, popFrontN;
 	ExecutionResults output;
 	bool stopExecution;
-	auto cpuInstructions = cpu.map!(x => cast(Instruction)x);
+	auto cpuInstructions = cpu.map!(x => cast(Instruction)x).array;
 	output.labels[cpuInstructions.front.fullAddress] = Label(format("UNKNOWN_"~cpuInstructions.front.offsetFormat, cpuInstructions.front.offset), cpuInstructions.front.fullAddress);
-	outer: foreach (instruction; cpuInstructions) {
+	foreach (instruction; cpuInstructions) {
 		if (instruction.isBranch) {
 			const branchAddress = instruction.target.address.get;
 			output.labels.require(branchAddress, Label("", branchAddress));
@@ -23,6 +23,8 @@ ExecutionResults execute(CPU)(CPU cpu) @safe pure {
 	foreach (id, labelAddr; output.labels.byKey.array.sort.filter!(x => output.labels[x].name == "").enumerate) {
 		output.labels[labelAddr].name = format!"@UNKNOWN%d"(id);
 	}
+	cpu.popFrontN(cpuInstructions.length);
+	output.nextOffset = cpu.fullAddr();
 	return output;
 }
 
@@ -34,6 +36,7 @@ struct Label {
 struct ExecutionResults {
 	Instruction[] instructions;
 	Label[ulong] labels;
+	size_t nextOffset;
 }
 
 struct Instruction {
@@ -71,6 +74,7 @@ struct Instruction {
 	Target target;
 	bool isBranch;
 	Nullable!(string,"") comment;
+	string addressingMode;
 	void toString(Writer)(Writer sink, const FormatSpec!char fmt) const {
 		import std.format : format, formattedWrite;
 		import std.range : put;
@@ -87,6 +91,7 @@ struct Instruction {
 	}
 	bool opEquals(const Instruction other) const @safe {
 		return this.mnemonic == other.mnemonic &&
+			this.addressingMode == other.addressingMode &&
 			this.target == other.target;
 	}
 }
